@@ -1,0 +1,237 @@
+"Games"
+{
+    "tf"
+    {
+        "Offsets"
+        {
+            "OSType"
+            {
+                "windows"   "0"
+                "linux"     "1"
+            }
+
+            "CTFPlayer::EquipWearable()"
+            {
+                "windows"   "438"    
+                "linux"     "439"
+            }
+            "CTFPlayer::GiveNamedItem()"
+            {
+                "windows"   "486"
+                "linux"     "493"
+            }
+
+            "CBaseCombatWeapon::Deploy()"
+            {
+                "windows"   "261"
+                "linux"     "267"
+            }
+
+            "CTFWearable::m_bAlwaysAllow"
+            {
+                "windows"   "1464"
+                "linux"     "1476"
+            }
+
+            "CUtlVector::m_Size"
+            {
+                "windows"   "12"
+                "linux"     "12"
+            }
+        }
+        "Signatures"
+        {
+            // xref to offset aItemBlackliste ; "#Item_BlacklistedInMatch"
+            "CTFPlayer::GetLoadoutItem()"
+            {
+                "library"   "server"
+                "windows"   "\x55\x8B\xEC\x83\xEC\x10\x53\x56\x8B\xF1\x8B\x0D\x2A\x2A\x2A\x2A"
+                "linux"     "@_ZN9CTFPlayer14GetLoadoutItemEiib"
+            }
+
+            // xref to offset aCtfplayerManag ; "CTFPlayer::ManageRegularWeapons"
+            "CTFPlayer::ManageRegularWeapons()"
+            {
+                "library"   "server"
+                "windows"   "\x55\x8B\xEC\x83\xEC\x74\x57\x8B\xF9\xE8\x2A\x2A\x2A\x2A\x8D\x8F\xE0\x1A\x00\x00"
+                "linux"     "@_ZN9CTFPlayer20ManageRegularWeaponsEP19TFPlayerClassData_t"
+            }
+
+            // go to CTFPlayer::ManageRegularWeapons(), should be function call near top with parameter 1 as 2nd parameter
+            "CTFPlayer::ValidateWeapons()"
+            {
+                "library"   "server"
+                "windows"   "\x55\x8B\xEC\x83\xEC\x58\x81\x65\xCC\xFF\xFF\x0F\xFF"
+                "linux"     "@_ZN9CTFPlayer15ValidateWeaponsEP19TFPlayerClassData_tb"
+            }
+
+            // xref to offset aMultMaxammoPri ; "mult_maxammo_primary"
+            "CTFPlayer::GetMaxAmmo()"
+            {
+                "library"   "server"
+                "windows"   "\x55\x8B\xEC\x8B\x45\x0C\x53\x8B\xD9"
+                "linux"     "@_ZN9CTFPlayer10GetMaxAmmoEii"
+            }
+
+            // xref to offset aCtfplayerSpawn ; "CTFPlayer::Spawn"
+            "CTFPlayer::Spawn()"
+            {
+                "library"   "server"
+                "windows"   "\x55\x8B\xEC\x81\xEC\xC8\x00\x00\x00\x53\x8B\xD9\x33\xD2\x8B\x0D\x2A\x2A\x2A\x2A\x89\x55\x98"
+                "linux"     "@_ZN9CTFPlayer5SpawnEv"
+            }
+
+            // just use the symbol lol
+            "CTFAmmoPack::PackTouch()"
+            {
+                "library"   "server"
+                "windows"   "@?PackTouch@CTFAmmoPack@@QAEXPAVCBaseEntity@@@Z"
+                "linux"     "@_ZN11CTFAmmoPack9PackTouchEP11CBaseEntity"
+            }
+
+            // xref to offset aAmmoGivesCharg ; "ammo_gives_charge"
+            // ignore CTFAmmoPack::PackTouch()
+            "CAmmoPack::MyTouch()"
+            {
+                "library"   "server"
+                "windows"   "\x55\x8B\xEC\x83\xEC\x50\x53\x8B\xD9\x32\xC0"
+                "linux"     "@_ZN9CAmmoPack7MyTouchEP11CBasePlayer"
+            }
+
+            // xref to offset aNoPrimaryAmmoF ; "no_primary_ammo_from_dispensers"
+            "CObjectDispenser::DispenseAmmo()"
+            {
+                "library"   "server"
+                "windows"   "\x55\x8B\xEC\x51\x53\x56\x57\x8B\x7D\x08\x8B\xD9\x85\xFF\x0F\x84\x2A\x2A\x2A\x2A"
+                "linux"     "@_ZN16CObjectDispenser12DispenseAmmoEP9CTFPlayer"
+            }
+        }
+        "Functions"
+        {
+            "CTFPlayer::GetLoadoutItem()"
+            {
+                "signature"     "CTFPlayer::GetLoadoutItem()"
+                "callconv"      "thiscall"
+                "return"        "int" // CEconItemView*
+                "this"          "entity"
+                "arguments"
+                {
+                    "iClass"
+                    {
+                        "type"  "int"
+                    }
+                    "iSlot"
+                    {
+                        "type"  "int"
+                    }
+                    "bReportWhitelistFails"
+                    {
+                        "type"  "bool"
+                    }
+                }
+            }
+            "CTFPlayer::ManageRegularWeapons()"
+            {
+                "signature"     "CTFPlayer::ManageRegularWeapons()"
+                "callconv"      "thiscall"
+                "return"        "void"
+                "this"          "entity"
+                "arguments"
+                {
+                    "pData"
+                    {
+                        "type"  "int" // TFPlayerClassData_t*
+                    }
+                }
+            }
+            "CTFPlayer::ValidateWeapons()"
+            {
+                "signature"     "CTFPlayer::ValidateWeapons()"
+                "callconv"      "thiscall"
+                "return"        "void"
+                "this"          "entity"
+                "arguments"
+                {
+                    "pData"
+                    {
+                        "type"  "int" // TFPlayerClassData_t*
+                    }
+                    "bResetWeapons"
+                    {
+                        "type"  "bool" // bool
+                    }
+                }
+            }
+            "CTFPlayer::GetMaxAmmo()"
+            {
+                "signature"     "CTFPlayer::GetMaxAmmo()"
+                "callconv"      "thiscall"
+                "return"        "int"
+                "this"          "entity"
+                "arguments"
+                {
+                    "iAmmoIndex"
+                    {
+                        "type"  "int"
+                    }
+                    "iClassIndex"
+                    {
+                        "type"  "int"
+                    }
+                }
+            }
+            "CTFPlayer::Spawn()"
+            {
+                "signature"     "CTFPlayer::Spawn()"
+                "callconv"      "thiscall"
+                "return"        "void"
+                "this"          "entity"
+            }
+
+            "CTFAmmoPack::PackTouch()"
+            {
+                "signature"     "CTFAmmoPack::PackTouch()"
+                "callconv"      "thiscall"
+                "return"        "void"
+                "this"          "entity"
+                "arguments"
+                {
+                    "pOther"
+                    {
+                        "type"  "cbaseentity"
+                    }
+                }
+            }
+
+            "CAmmoPack::MyTouch()"
+            {
+                "signature"     "CAmmoPack::MyTouch()"
+                "callconv"      "thiscall"
+                "return"        "bool"
+                "this"          "entity"
+                "arguments"
+                {
+                    "pPlayer"
+                    {
+                        "type"  "cbaseentity"
+                    }
+                }
+            }
+
+            "CObjectDispenser::DispenseAmmo()"
+            {
+                "signature"     "CObjectDispenser::DispenseAmmo()"
+                "callconv"      "thiscall"
+                "return"        "bool"
+                "this"          "entity"
+                "arguments"
+                {
+                    "pPlayer"
+                    {
+                        "type"  "cbaseentity"
+                    }
+                }
+            }
+        }
+    }
+}
