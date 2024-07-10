@@ -97,6 +97,7 @@ You may have noticed that a lot of these bugs are specific to Spy. Unfortunately
 - Taunts support
 - My own framework for custom weapons/wearables
 - Strange weapon support for inhibited weapons
+- Supporting dropped weapons
 
 ## Dependencies
 This plugin is compiled using SourceMod 1.12, but should work under SourceMod 1.11.
