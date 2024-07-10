@@ -2269,21 +2269,23 @@ static int CreateFakeWeapon()
 static int CalculateItemDefFromSectionName(char arg[64])
 {
     int itemdef = RetrieveItemDefByName(arg);
+    if (itemdef != TF_ITEMDEF_DEFAULT)
+        return itemdef;
+    
+    char buffer[68];
+    Format(buffer, sizeof(buffer), "The %s", arg);
+    itemdef = RetrieveItemDefByName(buffer);
+    if (itemdef != TF_ITEMDEF_DEFAULT)
+        return itemdef;
+
+    // If still invalid, the section might be an itemdef itself?
     if (itemdef == TF_ITEMDEF_DEFAULT)
     {
-        char buffer[68];
-        Format(buffer, sizeof(buffer), "The %s", arg);
-        itemdef = RetrieveItemDefByName(arg);
-
-        // If still invalid, the section might be an itemdef itself?
-        if (itemdef == TF_ITEMDEF_DEFAULT)
-        {
-            itemdef = StringToInt(arg);
-            if (EqualsZero(arg) || (0 < itemdef <= 0xFFFF))
-                TF2Econ_GetItemName(itemdef, arg, sizeof(arg));
-            else
-                itemdef = TF_ITEMDEF_DEFAULT;
-        }
+        itemdef = StringToInt(arg);
+        if (EqualsZero(arg) || (0 < itemdef <= 0xFFFF))
+            TF2Econ_GetItemName(itemdef, arg, sizeof(arg));
+        else
+            itemdef = TF_ITEMDEF_DEFAULT;
     }
     return itemdef;
 }
