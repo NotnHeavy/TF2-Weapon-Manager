@@ -98,6 +98,8 @@ You may have noticed that a lot of these bugs are specific to Spy. Unfortunately
 - My own framework for custom weapons/wearables
 - Strange weapon support for inhibited weapons
 - Supporting dropped weapons
+- A future plugin to replace the existing ammo reserve attributes with custom attributes that work on a per-weapon basis rather than a per-ammo type basis
+- A future plugin to fix a lot of weapons that don't work in custom slots
 
 ## Dependencies
 This plugin is compiled using SourceMod 1.12, but should work under SourceMod 1.11.
