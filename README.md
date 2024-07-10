@@ -92,7 +92,7 @@ While equipping any weapon in their typically designated slots should be complet
 
 You may have noticed that a lot of these bugs are specific to Spy. Unfortunately, at the current moment, Spy's manipulation is currently limited. This may be reviewed in the future.
 
-# Future ideas (if I ever get around to them)
+## Future ideas (if I ever get around to them)
 - Cosmetics support
 - Taunts support
 - My own framework for custom weapons/wearables
