@@ -2243,16 +2243,12 @@ static bool IsDefinitionAllowedInMedievalMode(definition_t def, TFClassType clas
 
 static bool IsDefinitionAllowed(definition_t def, TFClassType class, int slot)
 {
-    if (def.m_iItemDef == 1104) PrintToServer("START!");
     if (!IsDefinitionAllowedInMedievalMode(def, class))
         return false;
-    if (def.m_iItemDef == 1104) PrintToServer("1!");
     if (def.GetSlot(class, LoadoutToTF2(slot, class)))
         return true;
-    if (def.m_iItemDef == 1104) PrintToServer("2!");
     if (!g_bBlockUnlisted && TF2Econ_GetItemLoadoutSlot(def.m_iItemDef, class) == LoadoutToTF2(slot, class))
         return true;
-    if (def.m_iItemDef == 1104) PrintToServer("3!");
     return false;
 }
 
@@ -5064,13 +5060,10 @@ public any Native_WeaponManager_DefinitionAllowedByItemDef(Handle plugin, int nu
         return false;
     
     // Get the definition, check whether the item def is allowed and return.
-    if (itemdef == 1104) PrintToServer("FDJADFJADSN");
     if (!g_DefinitionsByIndex[itemdef].m_bToggled)
         return false;
-    if (itemdef == 1104) PrintToServer("FDJADFJADSN - 1");
     definition_t def;
     view_as<Definition>(g_DefinitionsByIndex[itemdef].m_Object).Get(def);
-    if (itemdef == 1104) PrintToServer("FDJADFJADSN - 2 - %i", def.m_iItemDef);
     return IsDefinitionAllowed(def, class, slot);
 }
 
