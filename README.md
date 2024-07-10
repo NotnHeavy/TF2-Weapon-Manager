@@ -10,7 +10,7 @@ This is a highly flexible and complex plugin that allows users to manage weapons
 
 This plugin is designed to be used either with in-game commands, through modifying a config, or programmatically.
 
-# How to use
+## How to use
 Users may create definitions for TF2 econ entities (wearables or weapons), which are referenced by either their name as specified in `items_game.txt` (usually it is the weapon or wearable's in-game name) or [their item definition index](https://wiki.alliedmods.net/Team_fortress_2_item_definition_indexes). Users may also create definitions for specific tags that aren't linked to any weapons; these definitions are designed to be inherited by other definitions through a copy-paste mechanism.
 
 Definitions are defined within config files in `addons/sourcemod/configs/weapon_manager/`, with an `autosave.cfg` being created whenever you save on demand, or on plugin end. Each individiual definition is listed within the `Loadout` key. Within each definition, you may specify properties, which are prefixed with `#`:
@@ -70,16 +70,16 @@ As mentioned earlier, config files are defined in `addons/sourcemod/configs/weap
 ## Natives
 Check out `./scripting/include/weapon_manager.inc` to see a wide range of natives. I highly recommend you use these natives if you are working with weapon code in your own plugins, as due to many hacks being used with weapons in custom slots, traditional methods of finding weapons may lead to you modifying the wrong weapon entirely.
 
-# Settings
+## Settings
 By default, this plugin will search for `autosave.cfg` on plugin load, to load any definitions. This is written to on plugin end or on demand (using `weapon_write` or the native `WeaponManager_Write(const char[] cfg)`). However, using a config file located at `addons/sourcemod/configs/weapon_manager.cfg`, you may specify the default config path using the `"defaultconfig"` key. There are also available numerous other properties for server owners. See `addons/sourcemod/configs/weapon_manager.cfg` for more details.
 
-# Miscellaneous
+## Miscellaneous
 This plugin also exposes a ConVar for server operators to modify either in the server console or with the `sm_cvar` command - `weaponmanager_medievalmode`. This can be used to modify whether the server is using Medieval Mode or not. Plugin developers are advised to toggle Medieval Mode by changing this ConVar's value.
 
-# Notes
+## Notes
 While equipping any weapon in their typically designated slots should be completely functional and should not have any errors, weapons for different-than-intended classes and ESPECIALLY in custom slots too are HIGHLY LIKELY to break and functionality should be taken with a grain of salt. This plugin already implements loads of hacks in order to get this to work, but the overall concept of weapons in custom slots breaks a lot of conventions with how TF2 works behind the scenes. This plugin will not address issues beyond basic ammo control (weapons that use different ammo systems, such as the Gas Passer, are much more prone to breaking) as it is out of the scope of this plugin, so it is up to plugin developers to address these.
 
-# Known bugs
+## Known bugs
 - Sappers don't work in custom slots.
 - Sappers don't equip nicely if using the equip commands (the persist command/native after loadout is still functional).
 - Some weapons have incorrect ammo/clip sizes due to the ammo attributes TF2 uses internally. In the future I may write a plugin that will replace these attributes with custom attributes for individual weapons, rather than for primary/secondary ammo.
@@ -98,7 +98,7 @@ You may have noticed that a lot of these bugs are specific to Spy. Unfortunately
 - My own framework for custom weapons/wearables
 - Strange weapon support for inhibited weapons
 
-# Dependencies
+## Dependencies
 This plugin is compiled using SourceMod 1.12, but should work under SourceMod 1.11.
 
 The following external dependencies are mandatory for this plugin to function:
