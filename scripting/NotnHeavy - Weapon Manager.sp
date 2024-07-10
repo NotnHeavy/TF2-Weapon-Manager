@@ -1861,13 +1861,9 @@ public void OnLibraryRemoved(const char[] name)
 
 public void OnClientPutInServer(int client)
 {
+    CWXUnload(client);
     ClearLoadout(client);
     g_PlayerData[client].m_bFirstTime = true;
-}
-
-public void OnClientDisconnect(int client)
-{
-    CWXUnload(client);
 }
 
 public Action CTFPlayer_WeaponCanSwitchTo(int client, int weapon)
@@ -1963,7 +1959,7 @@ static void ClearLoadout(int client)
 static void CWXUnload(int client)
 {
     // Sanity check?
-    if (!(1 <= client <= MaxClients) || !HasEntProp(client, Prop_Send, "m_iClass"))
+    if (!(1 <= client <= MaxClients) || !IsValidEntity(client) || !HasEntProp(client, Prop_Send, "m_iClass"))
         return;
 
     // Get player data.
@@ -2379,11 +2375,10 @@ static bool GiveTo(int client, int slot, char name[NAME_LENGTH], bool persist, i
     g_PlayerData[client].m_iEquipIndex = 0;
 
     // Set the ammo of the newly equipped weapon if it uses a fake slot replacement entity.
-    if (IsValidEntity(slotdata.m_hFakeSlotReplacement))
-    {
-        int type = GetEntProp(entity, Prop_Send, "m_iPrimaryAmmoType");
+    int replacement = EntRefToEntIndex(slotdata.m_hReplacement);
+    int type = GetEntProp(replacement, Prop_Send, "m_iPrimaryAmmoType");
+    if (IsValidEntity(slotdata.m_hFakeSlotReplacement) && TF_AMMO_PRIMARY <= g_EntityData[replacement].m_iPrimaryAmmoType < TF_AMMO_COUNT && 0 <= type < MAX_AMMO_SLOTS)
         SetEntProp(client, Prop_Send, "m_iAmmo", GetMaxAmmo(client, type, data.m_eClass), .element = type);
-    }
 
     // Fix ammo for the newly equipped weapon.
     RequestFrame(FixAmmo, slotdata);
