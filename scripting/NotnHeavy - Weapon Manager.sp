@@ -49,7 +49,7 @@ public Plugin myinfo =
     name = PLUGIN_NAME,
     author = "NotnHeavy",
     description = "A loadout manager intended to be flexible, for server owners and plugin creators.",
-    version = "1.0",
+    version = "1.0.1",
     url = "none"
 };
 
@@ -1554,7 +1554,7 @@ public void OnPluginStart()
     delete config;
 
     // Set up global forwrads.
-    g_LoadedDefinitionsForward = new GlobalForward("WeaponManager_OnDefinitionsLoaded", ET_Ignore, Param_Cell);
+    g_LoadedDefinitionsForward = new GlobalForward("WeaponManager_OnDefinitionsLoaded", ET_Ignore, Param_Cell, Param_Cell);
     g_ConstructingLoadout = new GlobalForward("WeaponManager_OnLoadoutConstruction", ET_Ignore, Param_Cell, Param_Cell);
     g_ConstructingLoadoutPost = new GlobalForward("WeaponManager_OnLoadoutConstructionPost", ET_Ignore, Param_Cell, Param_Cell);
 
@@ -1644,6 +1644,38 @@ public void OnPluginStart()
 
     // Set up events.
     HookEvent("post_inventory_application", post_inventory_application);
+
+    // Register a list of commands server admins can use.
+    RegAdminCmd("weapon_write", weapon_write, ADMFLAG_GENERIC, "Creates a file (if it doesn't exist beforehand) and writes all definitions to it. If no name is provided, it will write to autosave.cfg.\nSyntax: weapon_write configname");
+    RegAdminCmd("weapon_loadconfig", weapon_loadconfig, ADMFLAG_GENERIC, "Load definitions from an existing config.\nSyntax: weapon_loadconfig configname");
+    RegAdminCmd("weapon_load", weapon_loadconfig, ADMFLAG_GENERIC, "Load definitions from an existing config.\nSyntax: weapon_load configname");
+    RegAdminCmd("weapon_listdefinitions", weapon_listdefinitions, ADMFLAG_GENERIC, "List all the names of the current definitions.\nSyntax: weapon_listdefinitions [class] [slot (0 - Primary | 1 - Secondary | 2 - Secondary | 3 - Disguise Kit/Construction PDA | 4 - Watch/Destruction PDA)]");
+    RegAdminCmd("weapon_listdefs", weapon_listdefinitions, ADMFLAG_GENERIC, "List all the names of the current definitions.\nSyntax: weapon_listdefs [class] [slot (0 - Primary | 1 - Secondary | 2 - Secondary | 3 - Disguise Kit/Construction PDA | 4 - Watch/Destruction PDA)]");
+    RegAdminCmd("weapon_list", weapon_listdefinitions, ADMFLAG_GENERIC, "List all the names of the current definitions.\nSyntax: weapon_list [class] [slot (0 - Primary | 1 - Secondary | 2 - Secondary | 3 - Disguise Kit/Construction PDA | 4 - Watch/Destruction PDA)]");
+    RegAdminCmd("weapon_add", weapon_add, ADMFLAG_GENERIC, "Add a new definition (native weapon, cwx weapon (must configure with weapon_modify!) or custom tag). If specified, it can inherit from another definition.\nSyntax: weapon_add (name | item definition index) [inherits]");
+    RegAdminCmd("weapon_remove", weapon_remove, ADMFLAG_GENERIC, "Remove a definition (native weapon, cwx weapon or custom tag)\nSyntax: weapon_remove (name | item definition index)");
+    RegAdminCmd("weapon_delete", weapon_remove, ADMFLAG_GENERIC, "Remove a definition (native weapon, cwx weapon or custom tag)\nSyntax: weapon_delete (name | item definition index)");
+    RegAdminCmd("weapon_del", weapon_remove, ADMFLAG_GENERIC, "Remove a definition (native weapon, cwx weapon or custom tag)\nSyntax: weapon_del (name | item definition index)");
+    RegAdminCmd("weapon_modify", weapon_modify, ADMFLAG_GENERIC, "Modify a definition's property.\nSyntax: weapon_modify (name | item definition index) property value");
+    RegAdminCmd("weapon_refresh", weapon_refresh, ADMFLAG_GENERIC, "Reparse all definitions.\nSyntax: weapon_refresh");
+    RegAdminCmd("weapon_toggleslot", weapon_toggleslot, ADMFLAG_GENERIC, "Toggle's a definition's slot.\nSyntax: weapon_toggleslot (name | item definition index) class slot (0 - Primary | 1 - Secondary | 2 - Secondary | 3 - Disguise Kit/Construction PDA | 4 - Watch/Destruction PDA) value");
+    RegAdminCmd("weapon_toggle", weapon_toggleslot, ADMFLAG_GENERIC, "Toggle's a definition's slot.\nSyntax: weapon_toggle (name | item definition index) class slot (0 - Primary | 1 - Secondary | 2 - Secondary | 3 - Disguise Kit/Construction PDA | 4 - Watch/Destruction PDA) value");
+    RegAdminCmd("weapon_disable", weapon_disable, ADMFLAG_GENERIC, "Disable a definition for every slot for a class.\nSyntax: weapon_disable (name | item definition index) class");
+    RegAdminCmd("weapon_block", weapon_disable, ADMFLAG_GENERIC, "Disable a definition for every slot for a class.\nSyntax: weapon_block (name | item definition index) class");
+    RegAdminCmd("weapon_listdefinition", weapon_listdefinition, ADMFLAG_GENERIC, "List the properties of a definition.\nSyntax: weapon_listdefinition (name | item definition index)");
+    RegAdminCmd("weapon_listdef", weapon_listdefinition, ADMFLAG_GENERIC, "List the properties of a definition.\nSyntax: weapon_listdef (name | item definition index)");
+    RegAdminCmd("weapon_giveto", weapon_giveto, ADMFLAG_GENERIC, "Give a weapon immediately to a player. You can choose whether it should persist.\nSyntax: weapon_giveto player slot (name | item definition index) [persist]");
+    RegAdminCmd("weapon_givetonext", weapon_givetonext, ADMFLAG_GENERIC, "Assign a weapon to a player, which will be equipped on resupply.\nSyntax: weapon_givetonext player class slot (name | item definition index)");
+    RegAdminCmd("weapon_unequipfrom", weapon_unequipfrom, ADMFLAG_GENERIC, "Unequip a weapon from a player, which will take place on resupply.\nSyntax: weapon_unequipfrom player class slot");
+
+    // Register console commands for users to use to equip weapons.
+    RegConsoleCmd("loadout", cmd_loadout);
+    RegConsoleCmd("gimme", cmd_gimme);
+    RegConsoleCmd("gimmenext", cmd_gimmenext);
+    RegConsoleCmd("unequip", cmd_unequip);
+
+    // Get a list of all stock weapons.
+    g_StockItems = TF2Econ_GetItemList(TF2Econ_FilterByStock);
 }
 
 public void OnPluginEnd()
@@ -1777,43 +1809,11 @@ public void OnMapStart()
         delete kv;
     }
 
-    // Get a list of all stock weapons.
-    g_StockItems = TF2Econ_GetItemList(TF2Econ_FilterByStock);
-
     // Create the ArrayList and fill it with definitions, if an autosave is present.
     g_Definitions = new StringMap();
     if (!FileExists(g_szCurrentPath, true))
         PrintToServer("\"%s\" doesn't exist, will only parse internal definitions...", g_szCurrentPath);
     ParseDefinitions(g_szCurrentPath);
-
-    // Register a list of commands server admins can use.
-    RegAdminCmd("weapon_write", weapon_write, ADMFLAG_GENERIC, "Creates a file (if it doesn't exist beforehand) and writes all definitions to it. If no name is provided, it will write to autosave.cfg.\nSyntax: weapon_write configname");
-    RegAdminCmd("weapon_loadconfig", weapon_loadconfig, ADMFLAG_GENERIC, "Load definitions from an existing config.\nSyntax: weapon_loadconfig configname");
-    RegAdminCmd("weapon_load", weapon_loadconfig, ADMFLAG_GENERIC, "Load definitions from an existing config.\nSyntax: weapon_load configname");
-    RegAdminCmd("weapon_listdefinitions", weapon_listdefinitions, ADMFLAG_GENERIC, "List all the names of the current definitions.\nSyntax: weapon_listdefinitions [class] [slot (0 - Primary | 1 - Secondary | 2 - Secondary | 3 - Disguise Kit/Construction PDA | 4 - Watch/Destruction PDA)]");
-    RegAdminCmd("weapon_listdefs", weapon_listdefinitions, ADMFLAG_GENERIC, "List all the names of the current definitions.\nSyntax: weapon_listdefs [class] [slot (0 - Primary | 1 - Secondary | 2 - Secondary | 3 - Disguise Kit/Construction PDA | 4 - Watch/Destruction PDA)]");
-    RegAdminCmd("weapon_list", weapon_listdefinitions, ADMFLAG_GENERIC, "List all the names of the current definitions.\nSyntax: weapon_list [class] [slot (0 - Primary | 1 - Secondary | 2 - Secondary | 3 - Disguise Kit/Construction PDA | 4 - Watch/Destruction PDA)]");
-    RegAdminCmd("weapon_add", weapon_add, ADMFLAG_GENERIC, "Add a new definition (native weapon, cwx weapon (must configure with weapon_modify!) or custom tag). If specified, it can inherit from another definition.\nSyntax: weapon_add (name | item definition index) [inherits]");
-    RegAdminCmd("weapon_remove", weapon_remove, ADMFLAG_GENERIC, "Remove a definition (native weapon, cwx weapon or custom tag)\nSyntax: weapon_remove (name | item definition index)");
-    RegAdminCmd("weapon_delete", weapon_remove, ADMFLAG_GENERIC, "Remove a definition (native weapon, cwx weapon or custom tag)\nSyntax: weapon_delete (name | item definition index)");
-    RegAdminCmd("weapon_del", weapon_remove, ADMFLAG_GENERIC, "Remove a definition (native weapon, cwx weapon or custom tag)\nSyntax: weapon_del (name | item definition index)");
-    RegAdminCmd("weapon_modify", weapon_modify, ADMFLAG_GENERIC, "Modify a definition's property.\nSyntax: weapon_modify (name | item definition index) property value");
-    RegAdminCmd("weapon_refresh", weapon_refresh, ADMFLAG_GENERIC, "Reparse all definitions.\nSyntax: weapon_refresh");
-    RegAdminCmd("weapon_toggleslot", weapon_toggleslot, ADMFLAG_GENERIC, "Toggle's a definition's slot.\nSyntax: weapon_toggleslot (name | item definition index) class slot (0 - Primary | 1 - Secondary | 2 - Secondary | 3 - Disguise Kit/Construction PDA | 4 - Watch/Destruction PDA) value");
-    RegAdminCmd("weapon_toggle", weapon_toggleslot, ADMFLAG_GENERIC, "Toggle's a definition's slot.\nSyntax: weapon_toggle (name | item definition index) class slot (0 - Primary | 1 - Secondary | 2 - Secondary | 3 - Disguise Kit/Construction PDA | 4 - Watch/Destruction PDA) value");
-    RegAdminCmd("weapon_disable", weapon_disable, ADMFLAG_GENERIC, "Disable a definition for every slot for a class.\nSyntax: weapon_disable (name | item definition index) class");
-    RegAdminCmd("weapon_block", weapon_disable, ADMFLAG_GENERIC, "Disable a definition for every slot for a class.\nSyntax: weapon_block (name | item definition index) class");
-    RegAdminCmd("weapon_listdefinition", weapon_listdefinition, ADMFLAG_GENERIC, "List the properties of a definition.\nSyntax: weapon_listdefinition (name | item definition index)");
-    RegAdminCmd("weapon_listdef", weapon_listdefinition, ADMFLAG_GENERIC, "List the properties of a definition.\nSyntax: weapon_listdef (name | item definition index)");
-    RegAdminCmd("weapon_giveto", weapon_giveto, ADMFLAG_GENERIC, "Give a weapon immediately to a player. You can choose whether it should persist.\nSyntax: weapon_giveto player slot (name | item definition index) [persist]");
-    RegAdminCmd("weapon_givetonext", weapon_givetonext, ADMFLAG_GENERIC, "Assign a weapon to a player, which will be equipped on resupply.\nSyntax: weapon_givetonext player class slot (name | item definition index)");
-    RegAdminCmd("weapon_unequipfrom", weapon_unequipfrom, ADMFLAG_GENERIC, "Unequip a weapon from a player, which will take place on resupply.\nSyntax: weapon_unequipfrom player class slot");
-
-    // Register console commands for users to use to equip weapons.
-    RegConsoleCmd("loadout", cmd_loadout);
-    RegConsoleCmd("gimme", cmd_gimme);
-    RegConsoleCmd("gimmenext", cmd_gimmenext);
-    RegConsoleCmd("unequip", cmd_unequip);
 
     // Show to the server maintainer what plugins are currently loaded.
     PrintToServer("\nCustom Weapons X: %s", (g_LoadedCWX ? "loaded" : "not loaded"));
@@ -1822,17 +1822,21 @@ public void OnMapStart()
     PrecacheSound("AmmoPack.Touch", true);
 
     // Create ConVars.
-    char buffer[2];
-    Format(buffer, sizeof(buffer), "%i", (GameRules_GetProp("m_bPlayingMedieval", 1) ? true : false));
-    weaponmanager_medievalmode = CreateConVar("weaponmanager_medievalmode", buffer, "Configures whether Medieval Mode is on (by configuring CTFGameRules::m_bPlayingMedieval).", (FCVAR_REPLICATED | FCVAR_SPONLY), true, 0.00, true, 1.00);
-    weaponmanager_medievalmode.AddChangeHook(MedievalModeToggled);
-    weaponmanager_medievalmode.SetString(buffer, true);
+    if (!g_AllLoaded)
+    {
+        char buffer[2];
+        Format(buffer, sizeof(buffer), "%i", (GameRules_GetProp("m_bPlayingMedieval", 1) ? true : false));
+        weaponmanager_medievalmode = CreateConVar("weaponmanager_medievalmode", buffer, "Configures whether Medieval Mode is on (by configuring CTFGameRules::m_bPlayingMedieval).", (FCVAR_REPLICATED | FCVAR_SPONLY), true, 0.00, true, 1.00);
+        weaponmanager_medievalmode.AddChangeHook(MedievalModeToggled);
+        weaponmanager_medievalmode.SetString(buffer, true);
+    }
 
     // Plugin ready.
-    g_AllLoaded = true;
     Call_StartForward(g_LoadedDefinitionsForward);
+    Call_PushCell(!g_AllLoaded);
     Call_PushCell(true);
     Call_Finish();
+    g_AllLoaded = true;
     PrintToServer("\n\"%s\" has loaded.\n--------------------------------------------------------", PLUGIN_NAME);
 }
 
@@ -4665,9 +4669,7 @@ static Action weapon_unequipfrom(int client, int args)
 
 public any Native_WeaponManager_IsPluginReady(Handle plugin, int numParams)
 {
-    if (g_AllLoaded)
-        return true;
-    return false;
+    return g_AllLoaded;
 }
 
 // Returns an ArrayList of definitions.

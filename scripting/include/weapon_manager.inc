@@ -463,9 +463,12 @@ native void WeaponManager_MedievalMode_DefinitionAllowedByItemDef(int itemdef, T
  * through loading a new config.
  * 
  * @param pluginstart   True if this is called when this plugin
- *                      has started.
+ *                      has loaded for the first time.
+ * @param mapstart      True if this is called when this map has
+ *                      loaded for the first time (always true if
+ *                      pluginstart is true).
  */
-forward void WeaponManager_OnDefinitionsLoaded(bool pluginstart);
+forward void WeaponManager_OnDefinitionsLoaded(bool pluginstart, bool mapstart);
 
 /**
  * Called immediately before the player's loadout is reconstructed.
