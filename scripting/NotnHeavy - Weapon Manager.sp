@@ -1845,11 +1845,12 @@ public void OnMapStart()
     }
 
     // Plugin ready.
+    bool pluginstart = !g_AllLoaded;
+    g_AllLoaded = true;
     Call_StartForward(g_LoadedDefinitionsForward);
-    Call_PushCell(!g_AllLoaded);
+    Call_PushCell(pluginstart);
     Call_PushCell(true);
     Call_Finish();
-    g_AllLoaded = true;
     PrintToServer("\n\"%s\" has loaded.\n--------------------------------------------------------", PLUGIN_NAME);
 }
 
