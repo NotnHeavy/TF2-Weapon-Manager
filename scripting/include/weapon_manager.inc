@@ -463,6 +463,26 @@ native void WeaponManager_MedievalMode_DefinitionAllowedByItemDef(int itemdef, T
  */
 native float WeaponManger_GetMaxAmmo(int weapon);
 
+/**
+ * Get the classname of an entity. Please use this in the WeaponManager forwards,
+ * as the weapon's details are faked internally to avoid TF2 quirks.
+ * 
+ * @param weapon    The weapon to use.
+ * @param classname The classname buffer.
+ * @param maxlength The size of the classname buffer.
+ */
+native void WeaponManager_GetWeaponClassname(int weapon, char[] classname, int maxlength);
+
+/**
+ * Get the item definition index of an entity. Please use this in the WeaponManager 
+ * forwards, as the weapon's details are faked internally to avoid TF2 quirks.
+ * 
+ * @param weapon    The weapon to use.
+ * 
+ * @return          The item definition index of the weapon.
+ */
+native int WeaponManager_GetWeaponItemDefinitionIndex(int weapon);
+
 //////////////////////////////////////////////////////////////////////////////
 // FORWARDS                                                                 //
 //////////////////////////////////////////////////////////////////////////////

@@ -50,7 +50,7 @@ public Plugin myinfo =
     name = PLUGIN_NAME,
     author = "NotnHeavy",
     description = "A loadout manager intended to be flexible, for server owners and plugin creators.",
-    version = "1.0.3",
+    version = "1.0.4",
     url = "none"
 };
 
@@ -177,6 +177,7 @@ enum struct entity_t
     // Cached.
     int m_iPrimaryAmmoType;
     int m_iItemDefinitionIndex;
+    char m_szClassName[64];
 }
 static entity_t g_EntityData[MAXENTITIES + 1];
 
@@ -1811,6 +1812,8 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
     CreateNative("WeaponManager_MedievalMode_DefinitionAllowed", Native_WeaponManager_MedievalMode_DefinitionAllowed);
     CreateNative("WeaponManager_MedievalMode_DefinitionAllowedByItemDef", Native_WeaponManager_MedievalMode_DefinitionAllowedByItemDef);
     CreateNative("WeaponManger_GetMaxAmmo", Native_WeaponManager_GetMaxAmmo);
+    CreateNative("WeaponManager_GetWeaponClassname", Native_WeaponManager_GetWeaponClassname);
+    CreateNative("WeaponManager_GetWeaponItemDefinitionIndex", Native_WeaponManager_GetWeaponItemDefinitionIndex);
 
     // Register this plugin as a library.
     RegPluginLibrary("NotnHeavy - Weapon Manager");
@@ -2155,11 +2158,6 @@ static int GetMaxAmmo(int client, int type, TFClassType class)
             if (TF2_IsPlayerInCondition(client, TFCond_RuneHaste))
                 value *= 2.0;
 
-            // Temporarily set the custom weapon's item definition index back to what it was
-            // for the forward call below.
-            int oldItemDef = GetEntProp(weapon, Prop_Send, "m_iItemDefinitionIndex");
-            SetEntProp(weapon, Prop_Send, "m_iItemDefinitionIndex", g_EntityData[weapon].m_iItemDefinitionIndex);
-
             // Since this is a custom weapon, call the OnGetAmmoMax() forward here too.
             Action returnType;
             int newMaxAmmo = value;
@@ -2170,9 +2168,6 @@ static int GetMaxAmmo(int client, int type, TFClassType class)
             Call_PushCell(weapon);
             Call_PushCellRef(newMaxAmmo);
             Call_Finish(returnType);
-
-            // Correct the custom weapon's item definition index.
-            SetEntProp(weapon, Prop_Send, "m_iItemDefinitionIndex", oldItemDef);
 
             // Return the new max ammo if desired.
             if (returnType == Plugin_Changed)
@@ -2241,6 +2236,8 @@ public void OnEntityCreated(int entity, const char[] classname)
     g_EntityData[entity].slot = -1;
     g_EntityData[entity].m_hFakeSlotReference = INVALID_ENT_REFERENCE;
     g_EntityData[entity].m_iPrimaryAmmoType = -1;
+    g_EntityData[entity].m_iItemDefinitionIndex = -1;
+    strcopy(g_EntityData[entity].m_szClassName, sizeof(entity_t::m_szClassName), classname);
     
     // If this is a weapon, hook when it is going to spawn.
     if (HasEntProp(entity, Prop_Send, "m_iItemDefinitionIndex"))
@@ -3356,7 +3353,6 @@ MRESReturn CTFPlayer_ManageRegularWeapons_Pre(int client, DHookParam parameters)
                         SetEntData(slot.m_hReplacement, FindSendPropInfo("CEconEntity", "m_iEntityQuality"), AE_UNIQUE);
     
                         // Next weapon.
-                        g_EntityData[EntRefToEntIndex(slot.m_hReplacement)].m_iItemDefinitionIndex = slot.m_iCachedItemDefinitionIndex;
                         break;
                     }
                 }
@@ -5399,14 +5395,44 @@ public any Native_WeaponManager_GetMaxAmmo(Handle plugin, int numParams)
     // Retrieve parameters.
     int weapon = GetNativeCell(1);
     if (!IsValidEntity(weapon))
-        return 0.00;
+        return 0;
     if (!HasEntProp(weapon, Prop_Send, "m_iPrimaryAmmoType"))
-        return 0.00;
+        return 0;
 
     // Find player details from the weapon and returns the max ammo.
     int owner = GetEntPropEnt(weapon, Prop_Send, "m_hOwnerEntity");
     if (!IsValidEntity(owner))
-        return 0.00;
+        return 0;
     int type = GetEntProp(weapon, Prop_Send, "m_iPrimaryAmmoType");
     return GetMaxAmmo(owner, type, TF2_GetPlayerClass(owner));
+}
+
+// Get the classname of an entity.
+public any Native_WeaponManager_GetWeaponClassname(Handle plugin, int numParams)
+{
+    // Retrieve parameters.
+    int weapon = GetNativeCell(1);
+    if (!IsValidEntity(weapon))
+        return 0.00;
+    int maxlength = GetNativeCell(3);
+
+    // Fill the classname buffer and return.
+    SetNativeString(2, g_EntityData[weapon].m_szClassName, maxlength);
+    return 0;
+}
+
+// Get the item definition index of an entity.
+public any Native_WeaponManager_GetWeaponItemDefinitionIndex(Handle plugin, int numParams)
+{
+    // Retrieve parameters.
+    int weapon = GetNativeCell(1);
+    if (!IsValidEntity(weapon))
+        return 0;
+    if (!HasEntProp(weapon, Prop_Send, "m_iItemDefinitionIndex"))
+        return 0;
+
+    // Return the weapon's item definition index.
+    if (g_EntityData[weapon].m_iItemDefinitionIndex != -1)
+        return g_EntityData[weapon].m_iItemDefinitionIndex;
+    return GetEntProp(weapon, Prop_Send, "m_iItemDefinitionIndex");
 }
