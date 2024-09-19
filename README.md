@@ -110,3 +110,4 @@ The following external dependencies are mandatory for this plugin to function:
 
 The following external dependencies are advisory and may be utilised to improve plugin functionality, but not mandatory:
 - [nosoop's Custom Weapons X (CWX)](https://github.com/nosoop/SM-TFCustomWeaponsX) - if loaded, this plugin can also work with custom weapon definitions, so long as they are defined in your CWX config file(s) and your desired definitions have the `#iscwx` property filled correctly.
+- [nosoop's Custom Attribute Framework](https://github.com/nosoop/SM-TFCustAttr) - if loaded, fake slot replacement entities will be given a custom attribute labelling that they are as such. This is used only by [my attributes framework](https://github.com/NotnHeavy/TF2-Attribute-Manager).

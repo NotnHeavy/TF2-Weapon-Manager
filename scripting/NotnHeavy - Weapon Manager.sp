@@ -28,6 +28,7 @@
 
 #undef REQUIRE_PLUGIN
 #include <third_party/cwx>
+#include <third_party/tf_custom_attributes>
 #define REQUIRE_PLUGIN
 
 #define AUTOSAVE_PATH "addons/sourcemod/configs/weapon_manager/autosave.cfg"
@@ -49,7 +50,7 @@ public Plugin myinfo =
     name = PLUGIN_NAME,
     author = "NotnHeavy",
     description = "A loadout manager intended to be flexible, for server owners and plugin creators.",
-    version = "1.0.1",
+    version = "1.0.2",
     url = "none"
 };
 
@@ -191,6 +192,7 @@ static Handle SDKCall_CTFPlayer_GiveNamedItem;
 static Handle SDKCall_CBaseCombatWeapon_Deploy;
 
 static bool g_LoadedCWX = false;
+static bool g_LoadedCustAttr = false;
 static bool g_AllLoaded = false;
 
 static bool g_bWhitelist = false;
@@ -1119,6 +1121,11 @@ methodmap Slot
         SetEntProp(entity, Prop_Send, "m_bInitialized", true);
         DispatchSpawn(entity);
 
+        // If Custom Attribute Framework is loaded, set a custom attribute that designates
+        // this weapon as a fake slot replacement entity.
+        if (g_LoadedCustAttr)
+            TF2CustAttr_SetInt(entity, "__IS_FAKE_SLOT_REPLACEMENT_ENTITY", 1);
+
         // If this weapon is allowed in medieval mode, set its attribute.
         if (def.m_iAllowedInMedieval == 1)
             TF2Attrib_SetByName(entity, "allowed in medieval mode", 1.00);
@@ -1759,10 +1766,11 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
     // Register this plugin as a library.
     RegPluginLibrary("NotnHeavy - Weapon Manager");
 
-    // Mark these natives as optional in case CWX isn't loaded.
+    // Mark these natives as optional in case CWX/Custom Attribute Framework aren't loaded.
     MarkNativeAsOptional("CWX_GetPlayerLoadoutItem");
     MarkNativeAsOptional("CWX_RemovePlayerLoadoutItem");
     MarkNativeAsOptional("CWX_CanPlayerAccessItem");
+    MarkNativeAsOptional("TF2CustAttr_SetInt");
     return APLRes_Success;
 }
 
@@ -1772,6 +1780,7 @@ public void OnMapStart()
     // Continue plugin loading here.
     PrintToServer("--------------------------------------------------------");
     g_LoadedCWX = LibraryExists("cwx");
+    g_LoadedCustAttr = LibraryExists("tf2custattr");
 
     // Parse attribute_manager.cfg.
     if (!FileExists(GLOBALS_PATH, true))
@@ -1817,6 +1826,7 @@ public void OnMapStart()
 
     // Show to the server maintainer what plugins are currently loaded.
     PrintToServer("\nCustom Weapons X: %s", (g_LoadedCWX ? "loaded" : "not loaded"));
+    PrintToServer("Custom Attribute Framework: %s", (g_LoadedCustAttr ? "loaded" : "not loaded"));
 
     // Cache sounds.
     PrecacheSound("AmmoPack.Touch", true);
@@ -1851,12 +1861,16 @@ public void OnLibraryAdded(const char[] name)
         if (FileExists(g_szCurrentPath, true))
             ParseDefinitions(g_szCurrentPath);
     }
+    else if (strcmp("tf2custattr", name) == 0)
+        g_LoadedCustAttr = true;
 }
 
 public void OnLibraryRemoved(const char[] name)
 {
     if (strcmp("cwx", name) == 0)
         g_LoadedCWX = false;
+    else if (strcmp("tf2custattr", name) == 0)
+        g_LoadedCustAttr = false;
 }
 
 //////////////////////////////////////////////////////////////////////////////
