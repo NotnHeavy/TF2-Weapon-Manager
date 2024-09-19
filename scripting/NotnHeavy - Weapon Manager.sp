@@ -1680,7 +1680,10 @@ public void OnPluginStart()
     RegConsoleCmd("gimme", cmd_gimme);
     RegConsoleCmd("gimmenext", cmd_gimmenext);
     RegConsoleCmd("unequip", cmd_unequip);
+}
 
+public void OnAllPluginsLoaded()
+{
     // Get a list of all stock weapons.
     g_StockItems = TF2Econ_GetItemList(TF2Econ_FilterByStock);
 }
