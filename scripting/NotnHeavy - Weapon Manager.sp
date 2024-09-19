@@ -50,7 +50,7 @@ public Plugin myinfo =
     name = PLUGIN_NAME,
     author = "NotnHeavy",
     description = "A loadout manager intended to be flexible, for server owners and plugin creators.",
-    version = "1.0.2",
+    version = "1.0.3",
     url = "none"
 };
 
@@ -171,10 +171,12 @@ enum struct entity_t
 {
     int reference;
     int slot;
+    int owner;
     int m_hFakeSlotReference;
 
     // Cached.
     int m_iPrimaryAmmoType;
+    int m_iItemDefinitionIndex;
 }
 static entity_t g_EntityData[MAXENTITIES + 1];
 
@@ -191,9 +193,12 @@ static Handle SDKCall_CTFPlayer_EquipWearable;
 static Handle SDKCall_CTFPlayer_GiveNamedItem;
 static Handle SDKCall_CBaseCombatWeapon_Deploy;
 
+static Handle SDKCall_CTFPlayer_GetMaxAmmo;
+
 static bool g_LoadedCWX = false;
 static bool g_LoadedCustAttr = false;
 static bool g_AllLoaded = false;
+
 static bool g_bMapStart = false;
 
 static bool g_bWhitelist = false;
@@ -223,6 +228,8 @@ static ArrayList g_StockItems;
 static GlobalForward g_LoadedDefinitionsForward;
 static GlobalForward g_ConstructingLoadout;
 static GlobalForward g_ConstructingLoadoutPost;
+static GlobalForward g_WeaponSpawnPost;
+static GlobalForward g_GetMaxAmmo;
 
 static int CUtlVector_m_Size;
 static int CTFWearable_m_bAlwaysAllow;
@@ -931,7 +938,18 @@ methodmap Slot
         {
             // Ensure the desired weapon is equipped on CWX's side.
             if (!hascwxWeapon || (strlen(uid) > 0 && strcmp(uid, def.m_szCWXUID) != 0))
+            {
+                // Invoke CWX.
                 CWX_SetPlayerLoadoutItem(this.entindex, this.m_eClass, def.m_szCWXUID, LOADOUT_FLAG_UPDATE_BACKEND);
+
+                // Call OnWeaponSpawnPost().
+                DataPack pack = new DataPack();
+                pack.WriteCell(true);
+                pack.WriteCell(EntIndexToEntRef(this.entindex));
+                pack.WriteCell(tf2Slot);
+                pack.WriteCell(this.m_eClass);
+                RequestFrame(CallOnWeaponSpawnPost, pack);
+            }
 
             // Continue.
             return false;
@@ -997,6 +1015,7 @@ methodmap Slot
         SetEntPropEnt(entity, Prop_Send, "m_hOwnerEntity", this.entindex);
         SetEntProp(entity, Prop_Send, "m_iTeamNum", GetEntProp(this.entindex, Prop_Send, "m_iTeamNum"));
         SetEntProp(entity, Prop_Send, "m_bValidatedAttachedEntity", true); // fuck you
+        g_EntityData[entity].m_iItemDefinitionIndex = def.m_iItemDef;
 
         // Work out whether the slot for this weapon is correct.
         correctSlot = (TF2Econ_GetItemLoadoutSlot(def.m_iItemDef, this.m_eClass) == tf2Slot);
@@ -1070,16 +1089,24 @@ methodmap Slot
         // Set m_hReplacement to this entity and set entity information.
         this.m_hReplacement = EntIndexToEntRef(entity);
         g_EntityData[entity].slot = tf2Slot;
+        g_EntityData[entity].owner = EntIndexToEntRef(this.entindex);
 
         // If this is the Gas Passer, do not immediately grant ammo.
         // However this must be done the next frame.
         RequestFrame(FixAmmo, this);
 
+        // Call OnWeaponSpawnPost().
+        DataPack pack = new DataPack();
+        pack.WriteCell(false);
+        pack.WriteCell(EntIndexToEntRef(entity));
+        pack.WriteCell(false);
+        RequestFrame(CallOnWeaponSpawnPost, pack);
+
         // Return true to signal that we created the weapon, not CWX.
         return true;
     }
 
-    public bool CreateFakeSlotReplacement(int entity, int ammotype, char classname[ENTITY_NAME_LENGTH])
+    public void CreateFakeSlotReplacement(int& entity, int& ammotype, char classname[ENTITY_NAME_LENGTH])
     {
         // Re-calculate basic information.
         int tf2Slot = LoadoutToTF2(this.m_iSlotIndex, this.m_eClass);
@@ -1134,14 +1161,22 @@ methodmap Slot
         // Equip the fake slot replacement entity.
         if (TF_AMMO_PRIMARY <= ammotype < TF_AMMO_COUNT)
         {
-            SetEntProp(entity, Prop_Send, "m_iPrimaryAmmoType", UNUSED_SLOT + WEAPONS_LENGTH + this.m_iSlotIndex );
-            SetEntProp(this.entindex, Prop_Send, "m_iAmmo", 2, UNUSED_SLOT + WEAPONS_LENGTH + this.m_iSlotIndex );
+            SetEntProp(entity, Prop_Send, "m_iPrimaryAmmoType", UNUSED_SLOT + WEAPONS_LENGTH + this.m_iSlotIndex);
+            SetEntProp(this.entindex, Prop_Send, "m_iAmmo", 2, UNUSED_SLOT + WEAPONS_LENGTH + this.m_iSlotIndex);
         }
         EquipPlayerWeapon(this.entindex, entity);
         this.m_hFakeSlotReplacement = EntIndexToEntRef(entity);
         g_EntityData[entity].slot = tf2Slot;
+        g_EntityData[entity].owner = EntIndexToEntRef(this.entindex);
         g_EntityData[replacement].m_hFakeSlotReference = this.m_hFakeSlotReplacement;
         g_PlayerData[this.entindex].m_iSlotToEquip = this.m_iSlotIndex;
+
+        // Call OnWeaponSpawnPost().
+        DataPack pack = new DataPack();
+        pack.WriteCell(false);
+        pack.WriteCell(EntIndexToEntRef(entity));
+        pack.WriteCell(true);
+        RequestFrame(CallOnWeaponSpawnPost, pack);
     }
 }
 
@@ -1517,7 +1552,7 @@ public void OnPluginStart()
     DHooks_CTFPlayer_ValidateWeapons.Enable(Hook_Post, CTFPlayer_ValidateWeapons_Post);
 
     DHooks_CTFPlayer_GetMaxAmmo = DynamicDetour.FromConf(config, "CTFPlayer::GetMaxAmmo()");
-    DHooks_CTFPlayer_GetMaxAmmo.Enable(Hook_Pre, CTFPlayer_GetMaxAmmo);
+    DHooks_CTFPlayer_GetMaxAmmo.Enable(Hook_Post, CTFPlayer_GetMaxAmmo);
 
     DHooks_CTFPlayer_Spawn = DynamicDetour.FromConf(config, "CTFPlayer::Spawn()");
     DHooks_CTFPlayer_Spawn.Enable(Hook_Pre, CTFPlayer_Spawn);
@@ -1534,15 +1569,15 @@ public void OnPluginStart()
     // Set up SDKCalls.
     StartPrepSDKCall(SDKCall_Player);
     PrepSDKCall_SetFromConf(config, SDKConf_Virtual, "CTFPlayer::EquipWearable()");
-    PrepSDKCall_AddParameter(SDKType_CBaseEntity, SDKPass_Pointer); // CBaseEntity*
+    PrepSDKCall_AddParameter(SDKType_CBaseEntity, SDKPass_Pointer); // CBaseEntity*;
     SDKCall_CTFPlayer_EquipWearable = EndPrepSDKCall();
 
     StartPrepSDKCall(SDKCall_Player);
     PrepSDKCall_SetFromConf(config, SDKConf_Virtual, "CTFPlayer::GiveNamedItem()");
-    PrepSDKCall_AddParameter(SDKType_String, SDKPass_Pointer);      // const char *pszName
-    PrepSDKCall_AddParameter(SDKType_PlainOldData, SDKPass_Plain);  // int iSubType
-    PrepSDKCall_AddParameter(SDKType_PlainOldData, SDKPass_Plain);  // const CEconItemView *pScriptItem
-    PrepSDKCall_AddParameter(SDKType_Bool, SDKPass_Plain);          // bool bForce
+    PrepSDKCall_AddParameter(SDKType_String, SDKPass_Pointer);      // const char *pszName;
+    PrepSDKCall_AddParameter(SDKType_PlainOldData, SDKPass_Plain);  // int iSubType;
+    PrepSDKCall_AddParameter(SDKType_PlainOldData, SDKPass_Plain);  // const CEconItemView *pScriptItem;
+    PrepSDKCall_AddParameter(SDKType_Bool, SDKPass_Plain);          // bool bForce;
     PrepSDKCall_SetReturnInfo(SDKType_CBaseEntity, SDKPass_Pointer, (VDECODE_FLAG_ALLOWNULL | VDECODE_FLAG_ALLOWNOTINGAME | VDECODE_FLAG_ALLOWWORLD));
     SDKCall_CTFPlayer_GiveNamedItem = EndPrepSDKCall();
 
@@ -1550,6 +1585,13 @@ public void OnPluginStart()
     PrepSDKCall_SetFromConf(config, SDKConf_Virtual, "CBaseCombatWeapon::Deploy()");
     PrepSDKCall_SetReturnInfo(SDKType_Bool, SDKPass_Plain);         // bool
     SDKCall_CBaseCombatWeapon_Deploy = EndPrepSDKCall();
+
+    StartPrepSDKCall(SDKCall_Player);
+    PrepSDKCall_SetFromConf(config, SDKConf_Signature, "CTFPlayer::GetMaxAmmo()");
+    PrepSDKCall_AddParameter(SDKType_PlainOldData, SDKPass_Plain);  // int iAmmoIndex;
+    PrepSDKCall_AddParameter(SDKType_PlainOldData, SDKPass_Plain);  // int iClassIndex = -1;
+    PrepSDKCall_SetReturnInfo(SDKType_PlainOldData, SDKPass_Plain); // int
+    SDKCall_CTFPlayer_GetMaxAmmo = EndPrepSDKCall();
 
     // Set offsets.
     CUtlVector_m_Size = config.GetOffset("CUtlVector::m_Size");
@@ -1563,8 +1605,10 @@ public void OnPluginStart()
 
     // Set up global forwrads.
     g_LoadedDefinitionsForward = new GlobalForward("WeaponManager_OnDefinitionsLoaded", ET_Ignore, Param_Cell, Param_Cell);
-    g_ConstructingLoadout = new GlobalForward("WeaponManager_OnLoadoutConstruction", ET_Ignore, Param_Cell, Param_Cell);
+    g_ConstructingLoadout = new GlobalForward("WeaponManager_OnLoadoutConstruction", ET_Single, Param_Cell, Param_Cell);
     g_ConstructingLoadoutPost = new GlobalForward("WeaponManager_OnLoadoutConstructionPost", ET_Ignore, Param_Cell, Param_Cell);
+    g_WeaponSpawnPost = new GlobalForward("WeaponManager_OnWeaponSpawnPost", ET_Ignore, Param_Cell, Param_Cell, Param_Cell, Param_Cell);
+    g_GetMaxAmmo = new GlobalForward("WeaponManager_OnGetMaxAmmo", ET_Single, Param_Cell, Param_Cell, Param_Cell, Param_Cell, Param_CellByRef);
 
     // Fill class data.
     g_Classes = new StringMap();
@@ -1766,6 +1810,7 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
     CreateNative("WeaponManager_GetSlotOfWeapon", Native_WeaponManager_GetSlotOfWeapon);
     CreateNative("WeaponManager_MedievalMode_DefinitionAllowed", Native_WeaponManager_MedievalMode_DefinitionAllowed);
     CreateNative("WeaponManager_MedievalMode_DefinitionAllowedByItemDef", Native_WeaponManager_MedievalMode_DefinitionAllowedByItemDef);
+    CreateNative("WeaponManger_GetMaxAmmo", Native_WeaponManager_GetMaxAmmo);
 
     // Register this plugin as a library.
     RegPluginLibrary("NotnHeavy - Weapon Manager");
@@ -1876,6 +1921,81 @@ public void OnLibraryRemoved(const char[] name)
         g_LoadedCWX = false;
     else if (strcmp("tf2custattr", name) == 0)
         g_LoadedCustAttr = false;
+}
+
+//////////////////////////////////////////////////////////////////////////////
+// REQUESTFRAME() FUNCTIONS                                                 //
+//////////////////////////////////////////////////////////////////////////////
+
+static void FixAmmo(Slot slot)
+{
+    // Skip if the replacement entity is invalid.
+    if (!IsValidEntity(slot.m_hReplacement))
+        return;
+
+    // Fix edge-case bug where the Gas Passer is useable when equipped.
+    if (HasEntProp(slot.m_hReplacement, Prop_Send, "m_iPrimaryAmmoType"))
+    {
+        int type = GetEntProp(slot.m_hReplacement, Prop_Send, "m_iPrimaryAmmoType");
+        if (type == TF_AMMO_GRENADES1 && TF2Attrib_HookValueInt(0, "grenades1_resupply_denied", slot.m_hReplacement))
+            SetEntProp(slot.entindex, Prop_Send, "m_iAmmo", 0, .element = type);
+    }
+    if (TF2Attrib_HookValueInt(0, "item_meter_resupply_denied", slot.m_hReplacement))
+        SetEntPropFloat(slot.entindex, Prop_Send, "m_flItemChargeMeter", 0.00, .element = GetItemLoadoutSlotOfWeapon(EntRefToEntIndex(slot.m_hReplacement), slot.m_eClass));
+}
+
+static void ClientNoLongerSpawning(int client)
+{
+    g_PlayerData[client].m_bSpawning = false;
+}
+
+static void CallOnWeaponSpawnPost(DataPack pack)
+{
+    // Declare variables.
+    int client, entity;
+    bool isFake = false;
+
+    // Read from the pack and check if this is a CWX weapon.
+    pack.Reset();
+    bool isCWX = pack.ReadCell();
+    if (isCWX)
+    {
+        // Get player information.
+        client = EntRefToEntIndex(pack.ReadCell());
+        if (!IsValidEntity(client))
+            return;
+        int tf2Slot = pack.ReadCell();
+        TFClassType class = pack.ReadCell();
+        if (class != TF2_GetPlayerClass(client))
+            return;
+
+        // Try to locate this weapon.
+        PlayerData data = PlayerData(client);
+        Inventory inventory = data.GetInventory();
+        Slot slot = inventory.GetSlot(TF2ToLoadout(tf2Slot, class));
+        entity = slot.GetWeapon(.aliveonly = true);
+    }
+    else
+    {
+        // Read the entity.
+        entity = EntRefToEntIndex(pack.ReadCell());
+        if (!IsValidEntity(entity))
+            return;
+        client = EntRefToEntIndex(g_EntityData[entity].owner);
+        if (!IsValidEntity(client))
+            return;
+
+        // Check if this is a fake slot replacement entity.
+        isFake = pack.ReadCell();
+    }
+
+    // Call the OnWeaponSpawnPost() forward.
+    Call_StartForward(g_WeaponSpawnPost);
+    Call_PushCell(client);
+    Call_PushCell(entity);
+    Call_PushCell(isCWX);
+    Call_PushCell(isFake);
+    Call_Finish();
 }
 
 //////////////////////////////////////////////////////////////////////////////
@@ -2022,12 +2142,41 @@ static int GetMaxAmmo(int client, int type, TFClassType class)
         int foundtype = GetEntProp(weapon, Prop_Send, "m_iPrimaryAmmoType");
         if (foundtype == type)
         {
+            // Check if a custom primary ammo type is assigned. If not, just call
+            // the internal function.
+            int customType = g_EntityData[weapon].m_iPrimaryAmmoType;
+            if (customType == -1)
+                return SDKCall(SDKCall_CTFPlayer_GetMaxAmmo, client, type, class);
+
             // Get the initial value.
-            int value = ((g_EntityData[weapon].m_iPrimaryAmmoType == TF_AMMO_GRENADES3) ? 1 : g_MaxAmmo[class][g_EntityData[weapon].m_iPrimaryAmmoType]);
+            int value = ((customType == TF_AMMO_GRENADES3) ? 1 : g_MaxAmmo[class][customType]);
 
             // Check if the player has the Haste Powerup Rune.
             if (TF2_IsPlayerInCondition(client, TFCond_RuneHaste))
                 value *= 2.0;
+
+            // Temporarily set the custom weapon's item definition index back to what it was
+            // for the forward call below.
+            int oldItemDef = GetEntProp(weapon, Prop_Send, "m_iItemDefinitionIndex");
+            SetEntProp(weapon, Prop_Send, "m_iItemDefinitionIndex", g_EntityData[weapon].m_iItemDefinitionIndex);
+
+            // Since this is a custom weapon, call the OnGetAmmoMax() forward here too.
+            Action returnType;
+            int newMaxAmmo = value;
+            Call_StartForward(g_GetMaxAmmo);
+            Call_PushCell(client);
+            Call_PushCell(type);
+            Call_PushCell(class);
+            Call_PushCell(weapon);
+            Call_PushCellRef(newMaxAmmo);
+            Call_Finish(returnType);
+
+            // Correct the custom weapon's item definition index.
+            SetEntProp(weapon, Prop_Send, "m_iItemDefinitionIndex", oldItemDef);
+
+            // Return the new max ammo if desired.
+            if (returnType == Plugin_Changed)
+                return newMaxAmmo;
 
             // Return the value.
             return value;
@@ -2036,11 +2185,6 @@ static int GetMaxAmmo(int client, int type, TFClassType class)
 
     // Could not find anything. 
     return 0;
-}
-
-static void ClientNoLongerSpawning(int client)
-{
-    g_PlayerData[client].m_bSpawning = false;
 }
 
 // This function is complicated.
@@ -2164,23 +2308,6 @@ static void TF2_RemoveWeapon(int client, int weapon)
 
     RemovePlayerItem(client, weapon);
     AcceptEntityInput(weapon, "Kill");
-}
-
-static void FixAmmo(Slot slot)
-{
-    // Skip if the replacement entity is invalid.
-    if (!IsValidEntity(slot.m_hReplacement))
-        return;
-
-    // Fix edge-case bug where the Gas Passer is useable when equipped.
-    if (HasEntProp(slot.m_hReplacement, Prop_Send, "m_iPrimaryAmmoType"))
-    {
-        int type = GetEntProp(slot.m_hReplacement, Prop_Send, "m_iPrimaryAmmoType");
-        if (type == TF_AMMO_GRENADES1 && TF2Attrib_HookValueInt(0, "grenades1_resupply_denied", slot.m_hReplacement))
-            SetEntProp(slot.entindex, Prop_Send, "m_iAmmo", 0, .element = type);
-    }
-    if (TF2Attrib_HookValueInt(0, "item_meter_resupply_denied", slot.m_hReplacement))
-        SetEntPropFloat(slot.entindex, Prop_Send, "m_flItemChargeMeter", 0.00, .element = GetItemLoadoutSlotOfWeapon(EntRefToEntIndex(slot.m_hReplacement), slot.m_eClass));
 }
 
 static void TranslateWeaponEntForClass(char[] classname, int maxlength, TFClassType class)
@@ -2402,7 +2529,7 @@ static bool GiveTo(int client, int slot, char name[NAME_LENGTH], bool persist, i
     // Set the ammo of the newly equipped weapon if it uses a fake slot replacement entity.
     int replacement = EntRefToEntIndex(slotdata.m_hReplacement);
     int type = GetEntProp(replacement, Prop_Send, "m_iPrimaryAmmoType");
-    if (IsValidEntity(slotdata.m_hFakeSlotReplacement) && TF_AMMO_PRIMARY <= g_EntityData[replacement].m_iPrimaryAmmoType < TF_AMMO_COUNT && 0 <= type < MAX_AMMO_SLOTS)
+    if (IsValidEntity(slotdata.m_hFakeSlotReplacement) && TF_AMMO_PRIMARY <= g_EntityData[replacement].m_iPrimaryAmmoType < TF_AMMO_COUNT && UNUSED_SLOT <= type < MAX_AMMO_SLOTS)
         SetEntProp(client, Prop_Send, "m_iAmmo", GetMaxAmmo(client, type, data.m_eClass), .element = type);
 
     // Fix ammo for the newly equipped weapon.
@@ -2546,7 +2673,7 @@ static void post_inventory_application(Event event, const char[] name, bool dont
         
         // Check if it has modified ammo types.
         int primary = GetEntProp(weapon, Prop_Send, "m_iPrimaryAmmoType");
-        if (TF_AMMO_PRIMARY <= g_EntityData[weapon].m_iPrimaryAmmoType < TF_AMMO_COUNT && 0 <= primary < MAX_AMMO_SLOTS)
+        if (TF_AMMO_PRIMARY <= g_EntityData[weapon].m_iPrimaryAmmoType < TF_AMMO_COUNT && UNUSED_SLOT <= primary < MAX_AMMO_SLOTS)
             SetEntProp(client, Prop_Send, "m_iAmmo", GetMaxAmmo(client, primary, data.m_eClass), .element = primary);
 
         // NOTE:
@@ -3215,6 +3342,7 @@ MRESReturn CTFPlayer_ManageRegularWeapons_Pre(int client, DHookParam parameters)
                         SetEntData(slot.m_hReplacement, FindSendPropInfo("CEconEntity", "m_iEntityQuality"), AE_UNIQUE);
     
                         // Next weapon.
+                        g_EntityData[EntRefToEntIndex(slot.m_hReplacement)].m_iItemDefinitionIndex = slot.m_iCachedItemDefinitionIndex;
                         break;
                     }
                 }
@@ -3357,17 +3485,64 @@ MRESReturn CTFPlayer_ValidateWeapons_Post(int client, DHookParam parameters)
 MRESReturn CTFPlayer_GetMaxAmmo(int client, DHookReturn returnValue, DHookParam parameters)
 {
     // Check if this is a normal slot.
-    int slot = parameters.Get(1);
+    int ammoIndex = parameters.Get(1);
     TFClassType class = parameters.Get(2);
-    if (0 <= slot < TF_AMMO_COUNT)
+    if (ammoIndex == -1)
         return MRES_Ignored;
 
     // Correct the class value if it is -1.
     if (class == view_as<TFClassType>(-1))
         class = TF2_GetPlayerClass(client);
 
+    // Find the weapon that is being checked.
+    int weapon = INVALID_ENT_REFERENCE;
+    for (int i = 0; i < MAX_WEAPONS; ++i)
+    {
+        // Verify this weapon slot.
+        int weaponFound = GetEntPropEnt(client, Prop_Send, "m_hMyWeapons", i);
+        if (!IsValidEntity(weaponFound))
+            continue;
+        
+        // Verify that the ammo types are the same.
+        int foundtype = GetEntProp(weaponFound, Prop_Send, "m_iPrimaryAmmoType");
+        if (foundtype == ammoIndex)
+        {
+            weapon = weaponFound;
+            break;
+        }
+    }
+
+    // If this is a normal ammo index, transform the mxa ammo here with the OnGetMaxAmmo()
+    // forward.
+    if (0 <= ammoIndex < TF_AMMO_COUNT)
+    {
+        // Get the current max ammo.
+        int maxAmmo = returnValue.Value;
+
+        // Call the OnGetMaxAmmo() forward.
+        Action returnType;
+        int newMaxAmmo = maxAmmo;
+        Call_StartForward(g_GetMaxAmmo);
+        Call_PushCell(client);
+        Call_PushCell(ammoIndex);
+        Call_PushCell(class);
+        Call_PushCell(weapon);
+        Call_PushCellRef(newMaxAmmo);
+        Call_Finish(returnType);
+
+        // Return the new max ammo if desired.
+        if (returnType == Plugin_Changed)
+        {
+            returnValue.Value = newMaxAmmo;
+            return MRES_Supercede;
+        }
+
+        // Continue as per usual.
+        return MRES_Ignored;
+    }
+
     // Return the desired ammo instead.
-    returnValue.Value = GetMaxAmmo(client, slot, class);
+    returnValue.Value = GetMaxAmmo(client, ammoIndex, class);
     return MRES_Supercede;
 }
 
@@ -5201,4 +5376,23 @@ public any Native_WeaponManager_MedievalMode_DefinitionAllowedByItemDef(Handle p
     definition_t def;
     view_as<Definition>(g_DefinitionsByIndex[itemdef].m_Object).Get(def);
     return IsDefinitionAllowedInMedievalMode(def, class);
+}
+
+// Returns whether a specific item definition index is allowed for a certain class
+// of a specific slot for Medieval mode.
+public any Native_WeaponManager_GetMaxAmmo(Handle plugin, int numParams)
+{
+    // Retrieve parameters.
+    int weapon = GetNativeCell(1);
+    if (!IsValidEntity(weapon))
+        return 0.00;
+    if (!HasEntProp(weapon, Prop_Send, "m_iItemDefinitionIndex"))
+        return 0.00;
+
+    // Find player details from the weapon and returns the max ammo.
+    int owner = GetEntPropEnt(weapon, Prop_Send, "m_hOwnerEntity");
+    if (!IsValidEntity(owner))
+        return 0.00;
+    int type = GetEntProp(weapon, Prop_Send, "m_iPrimaryAmmoType");
+    return GetMaxAmmo(owner, type, TF2_GetPlayerClass(owner));
 }

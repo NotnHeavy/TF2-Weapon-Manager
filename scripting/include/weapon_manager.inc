@@ -454,6 +454,15 @@ native void WeaponManager_MedievalMode_DefinitionAllowed(const char[] name, TFCl
  */
 native void WeaponManager_MedievalMode_DefinitionAllowedByItemDef(int itemdef, TFClassType class);
 
+/**
+ * Get the max ammo of a weapon.
+ * 
+ * @param weapon    The weapon to get the max ammo of.
+ * 
+ * @return          The max ammo of the weapon.
+ */
+native float WeaponManger_GetMaxAmmo(int weapon);
+
 //////////////////////////////////////////////////////////////////////////////
 // FORWARDS                                                                 //
 //////////////////////////////////////////////////////////////////////////////
@@ -488,6 +497,31 @@ forward Action WeaponManager_OnLoadoutConstruction(int client, bool spawn);
  * @param spawn         True if the player has just spawned
  */
 forward void WeaponManager_OnLoadoutConstructionPost(int client, bool spawn);
+
+/**
+ * Called a frame after a weapon is spawned and given to a player.
+ * 
+ * @param client        The client who has been assigned a weapon.
+ * @param weapon        The weapon.
+ * @param isCWX         Is this a custom weapon using CWX?
+ * @param isFake        Is this a fake slot replacement entity?
+ */
+forward void WeaponManager_OnWeaponSpawnPost(int client, int weapon, bool isCWX, bool isFake);
+
+/**
+ * Called when retrieving the max ammo of a specific ammo type of a player.
+ * 
+ * @param client        The client being observed.
+ * @param type          The primary ammo type.
+ * @param class         The class of the player.
+ * @param weapon        The weapon entity that has been calculated by 
+ *                      Weapon Manager, or -1 if it failed.
+ * @param maxAmmo       The max ammo.
+ * 
+ * @return              If Plugin_Changed, return the max ammo set by
+ *                      the programmer instead.
+ */
+forward Action WeaponManager_OnGetMaxAmmo(int client, int type, TFClassType class, int weapon, int& maxAmmo);
 
 //////////////////////////////////////////////////////////////////////////////
 // PLUGIN INFO                                                              //
