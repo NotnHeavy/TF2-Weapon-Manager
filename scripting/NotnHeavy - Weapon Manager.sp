@@ -2539,9 +2539,12 @@ static bool GiveTo(int client, int slot, char name[NAME_LENGTH], bool persist, i
 
     // Set the ammo of the newly equipped weapon if it uses a fake slot replacement entity.
     int replacement = EntRefToEntIndex(slotdata.m_hReplacement);
-    int type = GetEntProp(replacement, Prop_Send, "m_iPrimaryAmmoType");
-    if (IsValidEntity(slotdata.m_hFakeSlotReplacement) && TF_AMMO_PRIMARY <= g_EntityData[replacement].m_iPrimaryAmmoType < TF_AMMO_COUNT && UNUSED_SLOT <= type < MAX_AMMO_SLOTS)
-        SetEntProp(client, Prop_Send, "m_iAmmo", GetMaxAmmo(client, type, data.m_eClass), .element = type);
+    if (HasEntProp(replacement, Prop_Send, "m_iPrimaryAmmoType"))
+    {
+        int type = GetEntProp(replacement, Prop_Send, "m_iPrimaryAmmoType");
+        if (IsValidEntity(slotdata.m_hFakeSlotReplacement) && TF_AMMO_PRIMARY <= g_EntityData[replacement].m_iPrimaryAmmoType < TF_AMMO_COUNT && UNUSED_SLOT <= type < MAX_AMMO_SLOTS)
+            SetEntProp(client, Prop_Send, "m_iAmmo", GetMaxAmmo(client, type, data.m_eClass), .element = type);
+    }
 
     // Fix ammo for the newly equipped weapon.
     RequestFrame(FixAmmo, slotdata);
@@ -5397,7 +5400,7 @@ public any Native_WeaponManager_GetMaxAmmo(Handle plugin, int numParams)
     int weapon = GetNativeCell(1);
     if (!IsValidEntity(weapon))
         return 0.00;
-    if (!HasEntProp(weapon, Prop_Send, "m_iItemDefinitionIndex"))
+    if (!HasEntProp(weapon, Prop_Send, "m_iPrimaryAmmoType"))
         return 0.00;
 
     // Find player details from the weapon and returns the max ammo.
