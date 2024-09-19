@@ -194,6 +194,7 @@ static Handle SDKCall_CBaseCombatWeapon_Deploy;
 static bool g_LoadedCWX = false;
 static bool g_LoadedCustAttr = false;
 static bool g_AllLoaded = false;
+static bool g_bMapStart = false;
 
 static bool g_bWhitelist = false;
 static bool g_bLoadDefaults = true;
@@ -1835,14 +1836,14 @@ public void OnMapStart()
     PrecacheSound("AmmoPack.Touch", true);
 
     // Create ConVars.
+    g_bMapStart = true;
     if (!g_AllLoaded)
     {
-        char buffer[2];
-        Format(buffer, sizeof(buffer), "%i", (GameRules_GetProp("m_bPlayingMedieval", 1) ? true : false));
-        weaponmanager_medievalmode = CreateConVar("weaponmanager_medievalmode", buffer, "Configures whether Medieval Mode is on (by configuring CTFGameRules::m_bPlayingMedieval).", (FCVAR_REPLICATED | FCVAR_SPONLY), true, 0.00, true, 1.00);
+        weaponmanager_medievalmode = CreateConVar("weaponmanager_medievalmode", "0", "Configures whether Medieval Mode is on (by configuring CTFGameRules::m_bPlayingMedieval).", (FCVAR_REPLICATED | FCVAR_SPONLY), true, 0.00, true, 1.00);
         weaponmanager_medievalmode.AddChangeHook(MedievalModeToggled);
-        weaponmanager_medievalmode.SetString(buffer, true);
     }
+    weaponmanager_medievalmode.BoolValue = view_as<bool>(GameRules_GetProp("m_bPlayingMedieval", 1));
+    g_bMapStart = false;
 
     // Plugin ready.
     bool pluginstart = !g_AllLoaded;
@@ -2563,14 +2564,16 @@ static void post_inventory_application(Event event, const char[] name, bool dont
 
 static void MedievalModeToggled(ConVar convar, const char[] oldValue, const char[] newValue)
 {
+    // Skip if running in OnMapStart().
+    if (g_bMapStart)
+        return;
+
     // If Medieval Mode is toggled, we have to refresh loadouts.
     if (convar.BoolValue)
-    {
         GameRules_SetProp("m_bPlayingMedieval", true, 1);
-        ParseDefinitions(g_szCurrentPath);
-    }
     else
         GameRules_SetProp("m_bPlayingMedieval", false, 1);
+    ParseDefinitions(g_szCurrentPath);
 }
 
 //////////////////////////////////////////////////////////////////////////////
