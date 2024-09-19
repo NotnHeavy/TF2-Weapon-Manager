@@ -2479,9 +2479,20 @@ static bool GiveTo(int client, int slot, char name[NAME_LENGTH], bool persist, i
     // Check if this is a CWX weapon. If so, handle it here.
     if (strlen(def.m_szCWXUID) > 0 && g_LoadedCWX)
     {
+        // Equip the weapon through CWX.
         CWX_EquipPlayerItem(client, def.m_szCWXUID);
         if (persist)
             CWX_SetPlayerLoadoutItem(client, data.m_eClass, def.m_szCWXUID, LOADOUT_FLAG_UPDATE_BACKEND);
+
+        // Call OnWeaponSpawnPost().
+        DataPack pack = new DataPack();
+        pack.WriteCell(true);
+        pack.WriteCell(EntIndexToEntRef(client));
+        pack.WriteCell(LoadoutToTF2(slot, data.m_eClass));
+        pack.WriteCell(data.m_eClass);
+        RequestFrame(CallOnWeaponSpawnPost, pack);
+
+        // Return early.
         return true;
     }
 
